@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #FFFDF9;
+    color: #1b3a1f;
+    margin: 0;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+  #root {
+    width: 100%;
+    max-width: 100%;
+    text-align: left;
+    border: none;
+    min-height: 100svh;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-forest-700 hover:bg-forest-800 text-white font-semibold px-6 py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer;
+  }
+  .btn-secondary {
+    @apply bg-earth-500 hover:bg-earth-600 text-white font-semibold px-6 py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer;
+  }
+  .btn-outline {
+    @apply border-2 border-forest-700 text-forest-700 hover:bg-forest-700 hover:text-white font-semibold px-6 py-3 rounded-lg transition-all duration-200 cursor-pointer;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300;
+  }
+  .section-title {
+    @apply text-3xl md:text-4xl font-bold text-forest-900 mb-3;
+  }
+  .section-subtitle {
+    @apply text-earth-600 text-lg mb-10 max-w-2xl mx-auto;
+  }
+  .input-field {
+    @apply w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent transition-all;
+  }
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #3a8540; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #25562a; }
