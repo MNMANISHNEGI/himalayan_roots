@@ -4,6 +4,8 @@ import { ShoppingCart, Star, Tag } from 'lucide-react'
 import { useCart } from '../context/CartContext'
 import toast from 'react-hot-toast'
 
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
 const PLACEHOLDER = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&q=80'
 
 const PRODUCT_IMAGES = {
@@ -18,12 +20,18 @@ const PRODUCT_IMAGES = {
   'wild-himalayan-honey': 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=400&q=80',
 }
 
+function getImageSrc(path) {
+  if (!path) return null
+  if (path.startsWith('http')) return path
+  return `${API_BASE}${path}`
+}
+
 export default function ProductCard({ product }) {
   const { addItem } = useCart()
 
   const discountedPrice = product.price * (1 - (product.discount_percentage || 0) / 100)
   const hasDiscount = product.discount_percentage > 0
-  const imageUrl = product.image_url || PRODUCT_IMAGES[product.slug] || PLACEHOLDER
+  const imageUrl = getImageSrc(product.image_url) || PRODUCT_IMAGES[product.slug] || PLACEHOLDER
 
   const handleAddToCart = (e) => {
     e.preventDefault()
@@ -39,7 +47,7 @@ export default function ProductCard({ product }) {
           src={imageUrl}
           alt={product.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          onError={(e) => { e.target.src = PLACEHOLDER }}
+          onError={(e) => { e.target.src = PRODUCT_IMAGES[product.slug] || PLACEHOLDER }}
         />
         {hasDiscount && (
           <div className="absolute top-3 left-3 bg-earth-500 text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
