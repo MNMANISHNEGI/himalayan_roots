@@ -1,8 +1,6 @@
 -- Himalayan Roots Database Schema
--- Database: h_roots
-
-CREATE DATABASE h_roots;
-\c h_roots;
+-- For Neon/Supabase/cloud: remove CREATE DATABASE line, connect directly via connection string
+-- For local psql: run against h_roots database
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -37,6 +35,9 @@ CREATE TABLE IF NOT EXISTS products (
   weight VARCHAR(50),
   origin VARCHAR(100),
   nutritional_info TEXT,
+  health_benefits TEXT,
+  cooking_tips TEXT,
+  weight_options JSONB DEFAULT '[]',
   tags JSONB DEFAULT '[]',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()

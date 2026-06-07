@@ -1,5 +1,4 @@
 -- Himalayan Roots Seed Data
-\c h_roots;
 
 -- Categories
 INSERT INTO categories (name, slug, description) VALUES

@@ -93,7 +93,7 @@ export default function Footer() {
         <div className="border-t border-forest-800 pt-8 mb-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             {[
-              ['🌿', '100% Organic'],
+              ['🌿', 'Chemical-Free'],
               ['🏔️', 'Direct from Farms'],
               ['🚚', `Free Shipping ₹${freeShippingAbove}+`],
               ['↩️', 'Easy Returns'],

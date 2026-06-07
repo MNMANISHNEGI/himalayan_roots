@@ -1,12 +1,20 @@
 import React, { useEffect, useState } from 'react'
-import { Plus, Edit2, Trash2, Search, X, Upload, Tag, Package } from 'lucide-react'
+import { Plus, Edit2, Trash2, Search, X, Upload, Package, PlusCircle, MinusCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '../../api/axios'
 
 const EMPTY_FORM = {
   name: '', short_description: '', description: '', price: '', discount_percentage: '0',
   stock: '', unit: 'kg', category_id: '', is_featured: 'false', is_active: 'true',
-  weight: '', origin: '', nutritional_info: '',
+  weight: '', origin: '', nutritional_info: '', health_benefits: '', cooking_tips: '',
+}
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
+function getImageSrc(preview) {
+  if (!preview) return ''
+  if (preview.startsWith('blob:') || preview.startsWith('http')) return preview
+  return `${API_BASE}${preview}`
 }
 
 export default function AdminProducts() {
@@ -19,6 +27,7 @@ export default function AdminProducts() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState('')
+  const [weightOptions, setWeightOptions] = useState([])
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
 
@@ -41,6 +50,7 @@ export default function AdminProducts() {
     setForm(EMPTY_FORM)
     setImageFile(null)
     setImagePreview('')
+    setWeightOptions([])
     setModal(true)
   }
 
@@ -60,7 +70,13 @@ export default function AdminProducts() {
       weight: product.weight || '',
       origin: product.origin || '',
       nutritional_info: product.nutritional_info || '',
+      health_benefits: product.health_benefits || '',
+      cooking_tips: product.cooking_tips || '',
     })
+    const opts = typeof product.weight_options === 'string'
+      ? JSON.parse(product.weight_options)
+      : (product.weight_options || [])
+    setWeightOptions(opts)
     setImagePreview(product.image_url || '')
     setImageFile(null)
     setModal(true)
@@ -73,6 +89,11 @@ export default function AdminProducts() {
     setImagePreview(URL.createObjectURL(file))
   }
 
+  const addWeightOpt = () => setWeightOptions(w => [...w, { label: '', price: '' }])
+  const removeWeightOpt = (i) => setWeightOptions(w => w.filter((_, idx) => idx !== i))
+  const updateWeightOpt = (i, field, val) =>
+    setWeightOptions(w => w.map((o, idx) => idx === i ? { ...o, [field]: val } : o))
+
   const handleSave = async (e) => {
     e.preventDefault()
     if (!form.name || !form.price) { toast.error('Name and price are required'); return }
@@ -80,6 +101,7 @@ export default function AdminProducts() {
     try {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => fd.append(k, v))
+      fd.append('weight_options', JSON.stringify(weightOptions))
       if (imageFile) fd.append('image', imageFile)
 
       if (editing) {
@@ -169,8 +191,20 @@ export default function AdminProducts() {
                 products.map(p => (
                   <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3.5">
-                      <div className="font-medium text-gray-900 line-clamp-1">{p.name}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{p.slug}</div>
+                      <div className="flex items-center gap-3">
+                        {p.image_url && (
+                          <img
+                            src={getImageSrc(p.image_url)}
+                            alt={p.name}
+                            className="w-10 h-10 rounded-lg object-cover border border-gray-100"
+                            onError={e => { e.target.style.display = 'none' }}
+                          />
+                        )}
+                        <div>
+                          <div className="font-medium text-gray-900 line-clamp-1">{p.name}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">{p.slug}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">{p.category_name || '—'}</td>
                     <td className="px-5 py-3.5">
@@ -230,9 +264,9 @@ export default function AdminProducts() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
                 <div className="flex gap-4 items-start">
-                  <div className="w-28 h-28 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50">
+                  <div className="w-28 h-28 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 shrink-0">
                     {imagePreview ? (
-                      <img src={imagePreview.startsWith('blob') ? imagePreview : `http://localhost:5000${imagePreview}`} alt="" className="w-full h-full object-cover" />
+                      <img src={getImageSrc(imagePreview)} alt="" className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none' }} />
                     ) : (
                       <Upload size={24} className="text-gray-300" />
                     )}
@@ -240,9 +274,12 @@ export default function AdminProducts() {
                   <div>
                     <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="product-image" />
                     <label htmlFor="product-image" className="btn-outline cursor-pointer inline-flex items-center gap-2 text-sm">
-                      <Upload size={16} /> Upload Image
+                      <Upload size={16} /> {imagePreview ? 'Change Image' : 'Upload Image'}
                     </label>
                     <p className="text-xs text-gray-400 mt-2">JPG, PNG, WebP up to 5MB</p>
+                    {editing && !imageFile && imagePreview && (
+                      <p className="text-xs text-forest-600 mt-1">Current image shown above</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -310,9 +347,51 @@ export default function AdminProducts() {
                   <input className="input-field" placeholder="Chakrata, Uttarakhand" value={form.origin} onChange={e => upd('origin', e.target.value)} />
                 </div>
 
+                {/* Weight/Size Options */}
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Size Options (Optional)</label>
+                  <p className="text-xs text-gray-400 mb-2">Add multiple pack sizes with different prices. If left empty, base price above is used.</p>
+                  <div className="space-y-2">
+                    {weightOptions.map((opt, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <input
+                          className="input-field flex-1"
+                          placeholder="Label (e.g. 250g, 500g, 1kg)"
+                          value={opt.label}
+                          onChange={e => updateWeightOpt(idx, 'label', e.target.value)}
+                        />
+                        <span className="text-gray-400 text-sm shrink-0">₹</span>
+                        <input
+                          type="number"
+                          className="input-field w-28"
+                          placeholder="Price"
+                          value={opt.price}
+                          onChange={e => updateWeightOpt(idx, 'price', e.target.value)}
+                        />
+                        <button type="button" onClick={() => removeWeightOpt(idx)} className="text-red-400 hover:text-red-600 transition-colors shrink-0">
+                          <MinusCircle size={20} />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={addWeightOpt} className="flex items-center gap-1.5 text-sm text-forest-700 hover:text-forest-900 transition-colors font-medium">
+                      <PlusCircle size={16} /> Add size option
+                    </button>
+                  </div>
+                </div>
+
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Nutritional Information</label>
-                  <textarea className="input-field" rows={2} placeholder="Protein, calories, minerals..." value={form.nutritional_info} onChange={e => upd('nutritional_info', e.target.value)} />
+                  <textarea className="input-field" rows={2} placeholder="Protein: 20g, Calories: 320kcal, Iron: 4mg..." value={form.nutritional_info} onChange={e => upd('nutritional_info', e.target.value)} />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Health Benefits</label>
+                  <textarea className="input-field" rows={3} placeholder="One benefit per line, e.g.&#10;High in plant protein&#10;Rich in iron and calcium&#10;Good source of dietary fibre" value={form.health_benefits} onChange={e => upd('health_benefits', e.target.value)} />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Cooking Tips</label>
+                  <textarea className="input-field" rows={3} placeholder="e.g.&#10;Soak overnight for best results&#10;Pressure cook for 3–4 whistles&#10;Pairs well with basmati rice" value={form.cooking_tips} onChange={e => upd('cooking_tips', e.target.value)} />
                 </div>
 
                 <div className="flex gap-6">

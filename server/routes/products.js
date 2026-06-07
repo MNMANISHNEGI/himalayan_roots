@@ -157,16 +157,16 @@ router.get('/admin/all', authenticateAdmin, async (req, res) => {
 // POST /api/products — create product
 router.post('/', authenticateAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: 5 }]), async (req, res) => {
   try {
-    const { name, short_description, description, price, discount_percentage, stock, unit, category_id, is_featured, is_active, weight, origin, nutritional_info, tags } = req.body;
+    const { name, short_description, description, price, discount_percentage, stock, unit, category_id, is_featured, is_active, weight, origin, nutritional_info, health_benefits, cooking_tips, weight_options, tags } = req.body;
 
     const slug = slugify(name, { lower: true, strict: true });
     const imageUrl = req.files?.image ? `/uploads/products/${req.files.image[0].filename}` : null;
     const additionalImages = req.files?.images ? req.files.images.map(f => `/uploads/products/${f.filename}`) : [];
 
     const result = await db.query(
-      `INSERT INTO products (name, slug, short_description, description, price, discount_percentage, stock, unit, category_id, image_url, images, is_featured, is_active, weight, origin, nutritional_info, tags)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
-      [name, slug, short_description, description, parseFloat(price), parseFloat(discount_percentage || 0), parseInt(stock || 0), unit || 'kg', category_id || null, imageUrl, JSON.stringify(additionalImages), is_featured === 'true', is_active !== 'false', weight, origin, nutritional_info, JSON.stringify(tags ? JSON.parse(tags) : [])]
+      `INSERT INTO products (name, slug, short_description, description, price, discount_percentage, stock, unit, category_id, image_url, images, is_featured, is_active, weight, origin, nutritional_info, health_benefits, cooking_tips, weight_options, tags)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
+      [name, slug, short_description, description, parseFloat(price), parseFloat(discount_percentage || 0), parseInt(stock || 0), unit || 'kg', category_id || null, imageUrl, JSON.stringify(additionalImages), is_featured === 'true', is_active !== 'false', weight, origin, nutritional_info, health_benefits || null, cooking_tips || null, JSON.stringify(weight_options ? JSON.parse(weight_options) : []), JSON.stringify(tags ? JSON.parse(tags) : [])]
     );
 
     res.status(201).json({ product: result.rows[0] });
@@ -180,7 +180,7 @@ router.post('/', authenticateAdmin, upload.fields([{ name: 'image', maxCount: 1 
 // PUT /api/products/:id — update product
 router.put('/:id', authenticateAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: 5 }]), async (req, res) => {
   try {
-    const { name, short_description, description, price, discount_percentage, stock, unit, category_id, is_featured, is_active, weight, origin, nutritional_info, tags } = req.body;
+    const { name, short_description, description, price, discount_percentage, stock, unit, category_id, is_featured, is_active, weight, origin, nutritional_info, health_benefits, cooking_tips, weight_options, tags } = req.body;
 
     const existing = await db.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
@@ -189,9 +189,9 @@ router.put('/:id', authenticateAdmin, upload.fields([{ name: 'image', maxCount: 
     const imageUrl = req.files?.image ? `/uploads/products/${req.files.image[0].filename}` : existing.rows[0].image_url;
 
     const result = await db.query(
-      `UPDATE products SET name=$1, slug=$2, short_description=$3, description=$4, price=$5, discount_percentage=$6, stock=$7, unit=$8, category_id=$9, image_url=$10, is_featured=$11, is_active=$12, weight=$13, origin=$14, nutritional_info=$15, tags=$16, updated_at=NOW()
-       WHERE id=$17 RETURNING *`,
-      [name || existing.rows[0].name, slug, short_description, description, parseFloat(price), parseFloat(discount_percentage || 0), parseInt(stock || 0), unit || 'kg', category_id || null, imageUrl, is_featured === 'true', is_active !== 'false', weight, origin, nutritional_info, JSON.stringify(tags ? JSON.parse(tags) : existing.rows[0].tags), req.params.id]
+      `UPDATE products SET name=$1, slug=$2, short_description=$3, description=$4, price=$5, discount_percentage=$6, stock=$7, unit=$8, category_id=$9, image_url=$10, is_featured=$11, is_active=$12, weight=$13, origin=$14, nutritional_info=$15, health_benefits=$16, cooking_tips=$17, weight_options=$18, tags=$19, updated_at=NOW()
+       WHERE id=$20 RETURNING *`,
+      [name || existing.rows[0].name, slug, short_description, description, parseFloat(price), parseFloat(discount_percentage || 0), parseInt(stock || 0), unit || 'kg', category_id || null, imageUrl, is_featured === 'true', is_active !== 'false', weight, origin, nutritional_info, health_benefits || null, cooking_tips || null, JSON.stringify(weight_options ? JSON.parse(weight_options) : existing.rows[0].weight_options || []), JSON.stringify(tags ? JSON.parse(tags) : existing.rows[0].tags), req.params.id]
     );
 
     res.json({ product: result.rows[0] });

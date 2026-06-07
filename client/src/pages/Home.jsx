@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Leaf, Shield, Truck, Award, ChevronRight, Star } from 'lucide-react'
+import { ArrowRight, Leaf, Shield, Truck, Award, ChevronRight, Star, Users, FlaskConical, Package, Mountain, Zap, MapPin } from 'lucide-react'
 import api from '../api/axios'
 import ProductCard from '../components/ProductCard'
 import { useSettings } from '../context/SettingsContext'
@@ -81,10 +81,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-wrap justify-center gap-6 md:gap-12 text-sm font-medium">
             {[
-              ['🌿', '100% Organic & Natural'],
+              ['🌿', 'Grown Without Chemicals'],
               ['🏔️', 'Direct from Mountain Farms'],
               ['🚚', `Free Shipping above ₹${freeShippingAbove}`],
-              ['✅', 'No Preservatives, No Chemicals'],
+              ['📦', 'Small Batch · Freshly Packed'],
             ].map(([icon, text]) => (
               <div key={text} className="flex items-center gap-2 text-forest-100">
                 <span>{icon}</span> {text}
@@ -197,23 +197,50 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Values */}
+      {/* Why Choose Us */}
       <section className="py-20 bg-cream">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
-            <h2 className="section-title">Why Himalayan Roots?</h2>
-            <p className="section-subtitle">Our commitment to purity, tradition, and the communities we serve</p>
+            <p className="text-earth-500 font-medium mb-2 tracking-wider uppercase text-sm">Our Promise</p>
+            <h2 className="section-title">Why Choose Us?</h2>
+            <p className="section-subtitle">Every product tells a story of altitude, care, and honest farming</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
-              { icon: <Leaf size={28} />, title: 'Truly Organic', desc: 'No synthetic pesticides, no GMOs. Just food grown the way nature intended — with mountain soil, glacial water, and sunshine.' },
-              { icon: <Shield size={28} />, title: 'Quality Assured', desc: 'Every batch is hand-sorted and lab-tested. We accept nothing less than what we would serve to our own families.' },
-              { icon: <Truck size={28} />, title: 'Direct Sourcing', desc: 'We work directly with farmers — no middlemen, no warehouses. Your order is as fresh as the mountains allow.' },
-              { icon: <Award size={28} />, title: 'Heritage Varieties', desc: 'We seek out and preserve rare, heirloom varieties that commercial agriculture has forgotten. Real food, real flavour.' },
+              {
+                icon: <Users size={28} />,
+                title: 'Direct from Farmers',
+                desc: 'We work straight with Himalayan farming families — no middlemen, no brokers. Fair prices reach the growers, and freshness reaches you.',
+              },
+              {
+                icon: <Leaf size={28} />,
+                title: 'Chemical-Free Cultivation',
+                desc: 'Our farmers use no synthetic pesticides, no chemical fertilisers. High-altitude conditions and traditional practices keep crops naturally healthy.',
+              },
+              {
+                icon: <Package size={28} />,
+                title: 'Small Batch Processing',
+                desc: 'We never mass-produce. Every batch is small, carefully hand-sorted, and processed to lock in peak freshness and flavour.',
+              },
+              {
+                icon: <Mountain size={28} />,
+                title: 'Authentic Himalayan Products',
+                desc: 'Every product is sourced from a specific named valley or village — Chakrata, Harshil, Osla, Kumaon. Origin matters. We tell you exactly where.',
+              },
+              {
+                icon: <Zap size={28} />,
+                title: 'Freshly Packed',
+                desc: 'Packed close to harvest in hygienic facilities, sealed for freshness. What arrives at your door is as close to the farm as possible.',
+              },
+              {
+                icon: <Truck size={28} />,
+                title: 'Pan India Delivery',
+                desc: `We deliver to every corner of India. Free shipping on orders above ₹${freeShippingAbove} — mountain goodness, doorstep delivered.`,
+              },
             ].map(({ icon, title, desc }) => (
-              <div key={title} className="text-center">
-                <div className="w-16 h-16 bg-forest-100 rounded-2xl flex items-center justify-center mx-auto mb-5 text-forest-700">
+              <div key={title} className="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 hover:border-forest-200 hover:shadow-md transition-all">
+                <div className="w-14 h-14 bg-forest-50 rounded-xl flex items-center justify-center mb-5 text-forest-700">
                   {icon}
                 </div>
                 <h3 className="font-bold text-forest-900 text-lg mb-3">{title}</h3>
