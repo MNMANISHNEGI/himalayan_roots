@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ShoppingCart, Plus, Minus, ArrowLeft, Star, MapPin, Package, Leaf, ChevronDown, ChevronUp, Heart, Flame } from 'lucide-react'
+import { ShoppingCart, Plus, Minus, ArrowLeft, Star, MapPin, Package, Leaf, ChevronDown, ChevronUp, Heart, Utensils } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '../api/axios'
 import { useCart } from '../context/CartContext'
@@ -8,15 +8,15 @@ import { useCart } from '../context/CartContext'
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
 const PRODUCT_IMAGES = {
-  'rajma-chakrata': 'https://images.unsplash.com/photo-1515942400420-2b98fed1f515?w=800&q=80',
-  'rajma-harshil': 'https://images.unsplash.com/photo-1515942400420-2b98fed1f515?w=800&q=80',
-  'rajma-osla': 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=800&q=80',
+  'rajma-chakrata':      'https://images.unsplash.com/photo-1515942400420-2b98fed1f515?w=800&q=80',
+  'rajma-harshil':       'https://images.unsplash.com/photo-1515942400420-2b98fed1f515?w=800&q=80',
+  'rajma-osla':          'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=800&q=80',
   'red-rice-lal-chawal': 'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=800&q=80',
-  'bhatt-ki-daal': 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80',
-  'apple-harshil': 'https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=800&q=80',
-  'apple-himachal': 'https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=800&q=80',
+  'bhatt-ki-daal':       'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80',
+  'apple-harshil':       'https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=800&q=80',
+  'apple-himachal':      'https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=800&q=80',
   'pure-himalayan-ghee': 'https://images.unsplash.com/photo-1631241364741-ae4b55efd2d6?w=800&q=80',
-  'wild-himalayan-honey': 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=800&q=80',
+  'wild-himalayan-honey':'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=800&q=80',
 }
 
 function getImageSrc(path) {
@@ -25,22 +25,25 @@ function getImageSrc(path) {
   return `${API_BASE}${path}`
 }
 
-function Accordion({ title, icon, children, defaultOpen = false }) {
-  const [open, setOpen] = useState(defaultOpen)
+function parseWeightOptions(raw) {
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : (raw || [])
+    return Array.isArray(parsed) ? parsed.filter(o => o.label && o.price) : []
+  } catch { return [] }
+}
+
+function parseJson(raw) {
+  try { return typeof raw === 'string' ? JSON.parse(raw) : (raw || []) } catch { return [] }
+}
+
+function Accordion({ title, open, toggle, icon, children }) {
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden mb-3">
-      <button
-        className="w-full flex items-center justify-between px-5 py-4 text-left font-semibold text-forest-900 hover:bg-gray-50 transition-colors"
-        onClick={() => setOpen(o => !o)}
-      >
+    <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <button className="w-full flex items-center justify-between px-5 py-4 text-left font-semibold text-forest-900 hover:bg-gray-50" onClick={toggle}>
         <span className="flex items-center gap-2">{icon}{title}</span>
         {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
       </button>
-      {open && (
-        <div className="px-5 pb-5 text-gray-600 text-sm leading-relaxed border-t border-gray-100 pt-4">
-          {children}
-        </div>
-      )}
+      {open && <div className="px-5 pb-5 border-t border-gray-100 pt-4">{children}</div>}
     </div>
   )
 }
@@ -53,17 +56,19 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true)
   const [quantity, setQuantity] = useState(1)
   const [selectedWeight, setSelectedWeight] = useState(null)
+  const [descOpen, setDescOpen] = useState(true)
+  const [infoOpen, setInfoOpen] = useState(false)
+  const [benefitsOpen, setBenefitsOpen] = useState(true)
+  const [cookingOpen, setCookingOpen] = useState(false)
 
   useEffect(() => {
     setLoading(true)
+    setSelectedWeight(null)
     api.get(`/products/${slug}`)
       .then(res => {
         setProduct(res.data.product)
         setReviews(res.data.reviews)
-        // Auto-select first weight option if available
-        const opts = typeof res.data.product.weight_options === 'string'
-          ? JSON.parse(res.data.product.weight_options)
-          : (res.data.product.weight_options || [])
+        const opts = parseWeightOptions(res.data.product.weight_options)
         if (opts.length > 0) setSelectedWeight(opts[0])
       })
       .catch(() => {})
@@ -74,10 +79,7 @@ export default function ProductDetail() {
     <div className="max-w-7xl mx-auto px-4 py-16 grid grid-cols-1 lg:grid-cols-2 gap-12">
       <div className="h-96 rounded-2xl animate-pulse bg-gray-200" />
       <div className="space-y-4">
-        <div className="h-6 w-24 rounded animate-pulse bg-gray-200" />
-        <div className="h-10 rounded animate-pulse bg-gray-200" />
-        <div className="h-4 w-2/3 rounded animate-pulse bg-gray-200" />
-        <div className="h-20 rounded animate-pulse bg-gray-200" />
+        {[...Array(5)].map((_, i) => <div key={i} className="h-6 rounded animate-pulse bg-gray-200" />)}
       </div>
     </div>
   )
@@ -90,30 +92,22 @@ export default function ProductDetail() {
     </div>
   )
 
-  const weightOptions = typeof product.weight_options === 'string'
-    ? JSON.parse(product.weight_options)
-    : (product.weight_options || [])
-
+  const weightOptions = parseWeightOptions(product.weight_options)
   const baseDiscountedPrice = product.price * (1 - (product.discount_percentage || 0) / 100)
-  const displayPrice = selectedWeight ? parseFloat(selectedWeight.price) : baseDiscountedPrice
+  const effectivePrice = selectedWeight ? parseFloat(selectedWeight.price) : baseDiscountedPrice
   const hasDiscount = !selectedWeight && product.discount_percentage > 0
-
-  const rawImageUrl = product.image_url ? getImageSrc(product.image_url) : (PRODUCT_IMAGES[product.slug] || null)
-  const fallbackImage = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80'
-  const imageUrl = rawImageUrl || fallbackImage
-
-  const handleAddToCart = () => {
-    const cartProduct = selectedWeight
-      ? { ...product, price: parseFloat(selectedWeight.price), discount_percentage: 0, unit: selectedWeight.label, id: `${product.id}-${selectedWeight.label}` }
-      : product
-    addItem(cartProduct, quantity)
-    const label = selectedWeight ? `${product.name} (${selectedWeight.label})` : product.name
-    toast.success(`${quantity}× ${label} added to cart`)
-  }
-
-  const tags = typeof product.tags === 'string' ? JSON.parse(product.tags) : (product.tags || [])
+  const imageUrl = getImageSrc(product.image_url) || PRODUCT_IMAGES[product.slug] || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80'
+  const tags = parseJson(product.tags)
   const healthBenefits = product.health_benefits ? product.health_benefits.split('\n').filter(Boolean) : []
   const cookingTips = product.cooking_tips ? product.cooking_tips.split('\n').filter(Boolean) : []
+
+  const handleAddToCart = () => {
+    const productToAdd = selectedWeight
+      ? { ...product, price: parseFloat(selectedWeight.price), discount_percentage: 0, unit: selectedWeight.label, id: `${product.id}-${selectedWeight.label}` }
+      : product
+    addItem(productToAdd, quantity)
+    toast.success(`${quantity}× ${product.name}${selectedWeight ? ` (${selectedWeight.label})` : ''} added to cart`)
+  }
 
   return (
     <div className="bg-cream min-h-screen">
@@ -135,7 +129,7 @@ export default function ProductDetail() {
                 src={imageUrl}
                 alt={product.name}
                 className="w-full h-[450px] object-cover"
-                onError={e => { e.target.src = fallbackImage }}
+                onError={e => { e.target.src = PRODUCT_IMAGES[product.slug] || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80' }}
               />
               {hasDiscount && (
                 <div className="absolute top-4 left-4 bg-earth-500 text-white font-bold px-3 py-1.5 rounded-full text-sm">
@@ -143,8 +137,6 @@ export default function ProductDetail() {
                 </div>
               )}
             </div>
-
-            {/* Tags */}
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">
                 {tags.map(tag => (
@@ -156,11 +148,11 @@ export default function ProductDetail() {
             )}
           </div>
 
-          {/* Info */}
+          {/* Info panel */}
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs text-forest-600 font-semibold uppercase tracking-wider">{product.category_name}</span>
-              {product.is_featured && <span className="bg-amber-400 text-white text-xs px-2 py-0.5 rounded-full">Featured</span>}
+              {product.is_featured && <span className="bg-gold text-white text-xs px-2 py-0.5 rounded-full">Featured</span>}
             </div>
 
             <h1 className="text-4xl font-bold text-forest-900 mb-3" style={{ fontFamily: 'Playfair Display, serif' }}>
@@ -182,23 +174,25 @@ export default function ProductDetail() {
               </div>
             )}
 
-            {/* Weight Options */}
+            {/* Weight / size options */}
             {weightOptions.length > 0 && (
               <div className="mb-5">
-                <p className="text-sm font-semibold text-gray-700 mb-2">Select Size:</p>
+                <p className="text-sm font-semibold text-gray-700 mb-2">Choose Pack Size:</p>
                 <div className="flex flex-wrap gap-2">
                   {weightOptions.map(opt => (
                     <button
                       key={opt.label}
                       onClick={() => setSelectedWeight(opt)}
-                      className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${
+                      className={`px-4 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
                         selectedWeight?.label === opt.label
                           ? 'border-forest-700 bg-forest-700 text-white'
                           : 'border-gray-200 text-gray-700 hover:border-forest-400'
                       }`}
                     >
                       <div>{opt.label}</div>
-                      <div className="text-xs mt-0.5 font-bold">₹{parseFloat(opt.price).toFixed(0)}</div>
+                      <div className={`text-xs font-bold ${selectedWeight?.label === opt.label ? 'text-forest-100' : 'text-forest-700'}`}>
+                        ₹{parseFloat(opt.price).toFixed(0)}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -206,8 +200,8 @@ export default function ProductDetail() {
             )}
 
             {/* Price */}
-            <div className="flex items-baseline gap-3 mb-6">
-              <span className="text-4xl font-bold text-forest-800">₹{displayPrice.toFixed(0)}</span>
+            <div className="flex items-baseline gap-3 mb-5">
+              <span className="text-4xl font-bold text-forest-800">₹{effectivePrice.toFixed(0)}</span>
               <span className="text-lg text-gray-400">/{selectedWeight ? selectedWeight.label : product.unit}</span>
               {hasDiscount && (
                 <div className="flex items-center gap-2">
@@ -219,7 +213,7 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {/* Origin & Stock */}
+            {/* Origin & stock */}
             <div className="flex flex-wrap gap-4 mb-6 text-sm">
               {product.origin && (
                 <div className="flex items-center gap-1.5 text-earth-600">
@@ -236,24 +230,17 @@ export default function ProductDetail() {
               </div>
             </div>
 
-            {/* Quantity + Cart */}
-            <div className="flex items-center gap-4 mb-8">
-              <div className="flex items-center gap-0 border-2 border-gray-200 rounded-xl overflow-hidden">
-                <button
-                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                  className="w-11 h-11 flex items-center justify-center hover:bg-gray-100 transition-colors"
-                >
+            {/* Quantity + Add to cart */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex items-center border-2 border-gray-200 rounded-xl overflow-hidden">
+                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-11 h-11 flex items-center justify-center hover:bg-gray-100 transition-colors">
                   <Minus size={16} />
                 </button>
                 <span className="w-12 text-center font-semibold text-forest-900">{quantity}</span>
-                <button
-                  onClick={() => setQuantity(q => Math.min(product.stock, q + 1))}
-                  className="w-11 h-11 flex items-center justify-center hover:bg-gray-100 transition-colors"
-                >
+                <button onClick={() => setQuantity(q => Math.min(product.stock, q + 1))} className="w-11 h-11 flex items-center justify-center hover:bg-gray-100 transition-colors">
                   <Plus size={16} />
                 </button>
               </div>
-
               <button
                 onClick={handleAddToCart}
                 disabled={product.stock === 0}
@@ -264,54 +251,63 @@ export default function ProductDetail() {
               </button>
             </div>
 
-            {/* Total */}
             {quantity > 1 && (
-              <p className="text-sm text-gray-500 mb-6">
-                Total: <span className="font-bold text-forest-800">₹{(displayPrice * quantity).toFixed(0)}</span>
+              <p className="text-sm text-gray-500 mb-5">
+                Total: <span className="font-bold text-forest-800">₹{(effectivePrice * quantity).toFixed(0)}</span>
               </p>
             )}
 
-            {/* Free shipping notice */}
             <div className="bg-forest-50 border border-forest-200 rounded-xl p-4 mb-6 text-sm text-forest-700">
-              🚚 Free delivery on orders above ₹999 · Usually ships in 2–4 business days
+              🚚 Free delivery on orders above ₹999 · Ships in 2–4 business days
             </div>
 
             {/* Accordions */}
-            <Accordion title="Product Description" defaultOpen={true} icon={<Leaf size={16} className="text-forest-600" />}>
-              <p className="whitespace-pre-line">{product.description}</p>
-            </Accordion>
-
-            {healthBenefits.length > 0 && (
-              <Accordion title="Health Benefits" icon={<Heart size={16} className="text-rose-500" />}>
-                <ul className="space-y-2">
-                  {healthBenefits.map((b, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <span className="text-green-500 font-bold mt-0.5">✓</span>
-                      <span>{b}</span>
-                    </li>
-                  ))}
-                </ul>
+            <div className="space-y-2">
+              <Accordion title="Product Description" open={descOpen} toggle={() => setDescOpen(!descOpen)}>
+                <p className="text-gray-600 text-sm leading-relaxed">{product.description}</p>
               </Accordion>
-            )}
 
-            {cookingTips.length > 0 && (
-              <Accordion title="Cooking Tips" icon={<Flame size={16} className="text-orange-500" />}>
-                <ol className="space-y-2 list-none">
-                  {cookingTips.map((t, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <span className="bg-earth-100 text-earth-700 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
-                      <span>{t}</span>
-                    </li>
-                  ))}
-                </ol>
-              </Accordion>
-            )}
+              {healthBenefits.length > 0 && (
+                <Accordion
+                  title="Health Benefits"
+                  open={benefitsOpen}
+                  toggle={() => setBenefitsOpen(!benefitsOpen)}
+                  icon={<Heart size={15} className="text-red-400" />}
+                >
+                  <ul className="space-y-2">
+                    {healthBenefits.map((b, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                        <span className="text-green-500 mt-0.5 shrink-0 font-bold">✓</span> {b}
+                      </li>
+                    ))}
+                  </ul>
+                </Accordion>
+              )}
 
-            {product.nutritional_info && (
-              <Accordion title="Nutritional Information" icon={<Package size={16} className="text-blue-500" />}>
-                <p className="whitespace-pre-line">{product.nutritional_info}</p>
-              </Accordion>
-            )}
+              {cookingTips.length > 0 && (
+                <Accordion
+                  title="Cooking Tips & Suggestions"
+                  open={cookingOpen}
+                  toggle={() => setCookingOpen(!cookingOpen)}
+                  icon={<Utensils size={15} className="text-earth-500" />}
+                >
+                  <ol className="space-y-2.5">
+                    {cookingTips.map((t, i) => (
+                      <li key={i} className="flex items-start gap-2.5 text-sm text-gray-600">
+                        <span className="w-5 h-5 bg-forest-100 text-forest-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
+                        {t}
+                      </li>
+                    ))}
+                  </ol>
+                </Accordion>
+              )}
+
+              {product.nutritional_info && (
+                <Accordion title="Nutritional Information" open={infoOpen} toggle={() => setInfoOpen(!infoOpen)}>
+                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{product.nutritional_info}</p>
+                </Accordion>
+              )}
+            </div>
           </div>
         </div>
 

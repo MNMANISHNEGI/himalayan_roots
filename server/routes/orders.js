@@ -1,9 +1,77 @@
 const express = require('express');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 
 const router = express.Router();
+
+let razorpay = null;
+if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+  const Razorpay = require('razorpay');
+  razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+}
+
+// POST /api/orders/create-payment — create Razorpay order
+router.post('/create-payment', async (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+  try {
+    const { items } = req.body;
+    if (!items?.length) return res.status(400).json({ error: 'No items provided' });
+
+    const settingsRes = await db.query(
+      "SELECT key, value FROM site_settings WHERE key IN ('free_shipping_above','shipping_charge')"
+    );
+    const sm = {};
+    settingsRes.rows.forEach(r => { sm[r.key] = r.value; });
+    const FREE_ABOVE = parseFloat(sm['free_shipping_above'] || 999);
+    const SHIP_CHARGE = parseFloat(sm['shipping_charge'] || 99);
+
+    let subtotal = 0;
+    for (const item of items) {
+      const pid = parseInt(item.product_id);
+      const pr = await db.query('SELECT price, discount_percentage FROM products WHERE id=$1 AND is_active=true', [pid]);
+      if (!pr.rows.length) throw new Error(`Product ${pid} not found`);
+      const p = pr.rows[0];
+      subtotal += p.price * (1 - p.discount_percentage / 100) * item.quantity;
+    }
+
+    const shipping = subtotal >= FREE_ABOVE ? 0 : SHIP_CHARGE;
+    const total = Math.round((subtotal + shipping) * 100); // paise
+
+    const rzpOrder = await razorpay.orders.create({
+      amount: total,
+      currency: 'INR',
+      receipt: `hr_${Date.now()}`,
+    });
+
+    res.json({ razorpay_order_id: rzpOrder.id, amount: rzpOrder.amount, currency: 'INR' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Payment initiation failed' });
+  }
+});
+
+// POST /api/orders/verify-payment — verify Razorpay signature
+router.post('/verify-payment', (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    return res.status(400).json({ error: 'Missing payment fields' });
+  }
+  const expected = crypto
+    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    .digest('hex');
+  if (expected === razorpay_signature) {
+    res.json({ verified: true });
+  } else {
+    res.status(400).json({ error: 'Payment verification failed — invalid signature' });
+  }
+});
 
 // POST /api/orders — place new order (public)
 router.post('/', async (req, res) => {
@@ -103,19 +171,58 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
-// PATCH /api/orders/:id/status — update order status (admin)
+// PATCH /api/orders/:id/status — update order status + tracking (admin)
 router.patch('/:id/status', authenticateAdmin, async (req, res) => {
-  const { status, payment_status } = req.body;
+  const { status, payment_status, tracking_number, courier_partner, note } = req.body;
+  const client = await db.getClient();
   try {
-    const result = await db.query(
-      `UPDATE orders SET status=COALESCE($1,status), payment_status=COALESCE($2,payment_status), updated_at=NOW()
-       WHERE id=$3 RETURNING *`,
-      [status, payment_status, req.params.id]
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `UPDATE orders SET
+         status            = COALESCE($1, status),
+         payment_status    = COALESCE($2, payment_status),
+         tracking_number   = COALESCE($3, tracking_number),
+         courier_partner   = COALESCE($4, courier_partner),
+         processing_at     = CASE WHEN $1 = 'confirmed'  AND processing_at IS NULL THEN NOW() ELSE processing_at END,
+         shipped_at        = CASE WHEN $1 = 'shipped'    AND shipped_at    IS NULL THEN NOW() ELSE shipped_at    END,
+         delivered_at      = CASE WHEN $1 = 'delivered'  AND delivered_at  IS NULL THEN NOW() ELSE delivered_at  END,
+         cancelled_at      = CASE WHEN $1 = 'cancelled'  AND cancelled_at  IS NULL THEN NOW() ELSE cancelled_at  END,
+         updated_at        = NOW()
+       WHERE id = $5 RETURNING *`,
+      [status || null, payment_status || null, tracking_number || null, courier_partner || null, req.params.id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+
+    if (result.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Order not found' }); }
+
+    // Log status change to tracking history
+    if (status) {
+      await client.query(
+        `INSERT INTO order_tracking (order_id, status, note, tracking_number) VALUES ($1,$2,$3,$4)`,
+        [req.params.id, status, note || null, tracking_number || null]
+      );
+    }
+
+    await client.query('COMMIT');
     res.json({ order: result.rows[0] });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/orders/:id/tracking — get status history (admin)
+router.get('/:id/tracking', authenticateAdmin, async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT * FROM order_tracking WHERE order_id=$1 ORDER BY created_at ASC',
+      [req.params.id]
+    );
+    res.json({ tracking: result.rows });
+  } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
 });

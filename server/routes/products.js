@@ -8,28 +8,50 @@ const { authenticateAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Multer config
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads/products');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// ── Image storage: Cloudinary in production, local disk in dev ────────────────
+let storage;
+let getUploadedUrl;
+
+if (process.env.CLOUDINARY_CLOUD_NAME) {
+  const { v2: cloudinary } = require('cloudinary');
+  const { CloudinaryStorage } = require('multer-storage-cloudinary');
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+  storage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+      folder: 'himalayan-roots/products',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+      transformation: [{ width: 1000, height: 1000, crop: 'limit', quality: 'auto:good' }],
+    },
+  });
+  // Cloudinary stores full URL in file.path
+  getUploadedUrl = (file) => file.path;
+} else {
+  storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(__dirname, '../uploads/products');
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname));
+    },
+  });
+  // Local storage — build a relative path served by Express static
+  getUploadedUrl = (file) => `/uploads/products/${file.filename}`;
+}
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|webp|gif/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
-  if (extname && mimetype) cb(null, true);
+  const allowed = /jpeg|jpg|png|webp/;
+  if (allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype)) cb(null, true);
   else cb(new Error('Only image files are allowed'));
 };
 
-const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({ storage, fileFilter, limits: { fileSize: 8 * 1024 * 1024 } });
 
 // ─── Public Routes ───────────────────────────────────────────────────────────
 
@@ -160,8 +182,8 @@ router.post('/', authenticateAdmin, upload.fields([{ name: 'image', maxCount: 1 
     const { name, short_description, description, price, discount_percentage, stock, unit, category_id, is_featured, is_active, weight, origin, nutritional_info, health_benefits, cooking_tips, weight_options, tags } = req.body;
 
     const slug = slugify(name, { lower: true, strict: true });
-    const imageUrl = req.files?.image ? `/uploads/products/${req.files.image[0].filename}` : null;
-    const additionalImages = req.files?.images ? req.files.images.map(f => `/uploads/products/${f.filename}`) : [];
+    const imageUrl = req.files?.image ? getUploadedUrl(req.files.image[0]) : null;
+    const additionalImages = req.files?.images ? req.files.images.map(f => getUploadedUrl(f)) : [];
 
     const result = await db.query(
       `INSERT INTO products (name, slug, short_description, description, price, discount_percentage, stock, unit, category_id, image_url, images, is_featured, is_active, weight, origin, nutritional_info, health_benefits, cooking_tips, weight_options, tags)
@@ -186,7 +208,7 @@ router.put('/:id', authenticateAdmin, upload.fields([{ name: 'image', maxCount: 
     if (existing.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
 
     const slug = name ? slugify(name, { lower: true, strict: true }) : existing.rows[0].slug;
-    const imageUrl = req.files?.image ? `/uploads/products/${req.files.image[0].filename}` : existing.rows[0].image_url;
+    const imageUrl = req.files?.image ? getUploadedUrl(req.files.image[0]) : existing.rows[0].image_url;
 
     const result = await db.query(
       `UPDATE products SET name=$1, slug=$2, short_description=$3, description=$4, price=$5, discount_percentage=$6, stock=$7, unit=$8, category_id=$9, image_url=$10, is_featured=$11, is_active=$12, weight=$13, origin=$14, nutritional_info=$15, health_benefits=$16, cooking_tips=$17, weight_options=$18, tags=$19, updated_at=NOW()

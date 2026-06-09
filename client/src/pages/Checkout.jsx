@@ -1,12 +1,12 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShoppingBag, Truck, CreditCard } from 'lucide-react'
+import { ShoppingBag, Truck, CreditCard, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '../api/axios'
 import { useCart } from '../context/CartContext'
 import { useSettings } from '../context/SettingsContext'
 
-const STATES = ['Uttarakhand', 'Himachal Pradesh', 'Delhi', 'Maharashtra', 'Karnataka', 'Tamil Nadu', 'Uttar Pradesh', 'Rajasthan', 'Gujarat', 'West Bengal', 'Other']
+const STATES = ['Uttarakhand', 'Himachal Pradesh', 'Delhi', 'Maharashtra', 'Karnataka', 'Tamil Nadu', 'Uttar Pradesh', 'Rajasthan', 'Gujarat', 'West Bengal', 'Punjab', 'Haryana', 'Bihar', 'Other']
 
 export default function Checkout() {
   const { items, totalPrice, clearCart } = useCart()
@@ -16,7 +16,7 @@ export default function Checkout() {
   const [form, setForm] = useState({
     customer_name: '', customer_email: '', customer_phone: '',
     shipping_address: '', city: '', state: '', pincode: '',
-    payment_method: 'cod', notes: '',
+    payment_method: 'online', notes: '',
   })
 
   const shipping = totalPrice >= freeShippingAbove ? 0 : shippingCharge
@@ -24,25 +24,105 @@ export default function Checkout() {
 
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!form.customer_name || !form.customer_email || !form.shipping_address || !form.city || !form.pincode) {
-      toast.error('Please fill all required fields')
+  const validateForm = () => {
+    if (!form.customer_name.trim()) { toast.error('Please enter your full name'); return false }
+    if (!form.customer_email.trim()) { toast.error('Please enter your email'); return false }
+    if (!form.shipping_address.trim()) { toast.error('Please enter your shipping address'); return false }
+    if (!form.city.trim()) { toast.error('Please enter your city'); return false }
+    if (!form.pincode.trim() || form.pincode.length < 6) { toast.error('Please enter a valid 6-digit pincode'); return false }
+    return true
+  }
+
+  const placeOrderInDB = async (paymentMethod, paymentStatus, razorpayPaymentId = null) => {
+    const payload = {
+      ...form,
+      payment_method: paymentMethod,
+      payment_status: paymentStatus,
+      items: items.map(i => ({ product_id: parseInt(i.id), quantity: i.quantity })),
+    }
+    if (razorpayPaymentId) payload.notes = `${form.notes || ''}${form.notes ? ' | ' : ''}RZP:${razorpayPaymentId}`.trim()
+    const res = await api.post('/orders', payload)
+    return res.data.order
+  }
+
+  const handleRazorpayPayment = async () => {
+    if (!window.Razorpay) {
+      toast.error('Payment SDK not loaded. Please refresh and try again.')
       return
     }
-
     setLoading(true)
     try {
-      const res = await api.post('/orders', {
-        ...form,
-        items: items.map(i => ({ product_id: i.id, quantity: i.quantity })),
+      const { data } = await api.post('/orders/create-payment', {
+        items: items.map(i => ({ product_id: parseInt(i.id), quantity: i.quantity })),
       })
+
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: data.amount,
+        currency: data.currency,
+        name: 'Himalayan Roots',
+        description: 'Pure products from the Himalayas',
+        image: '/favicon.svg',
+        order_id: data.razorpay_order_id,
+        prefill: {
+          name: form.customer_name,
+          email: form.customer_email,
+          contact: form.customer_phone,
+        },
+        notes: {
+          address: `${form.shipping_address}, ${form.city} - ${form.pincode}`,
+        },
+        theme: { color: '#2d5a3d' },
+        handler: async (response) => {
+          try {
+            await api.post('/orders/verify-payment', response)
+            const order = await placeOrderInDB('razorpay', 'paid', response.razorpay_payment_id)
+            clearCart()
+            navigate(`/order-success/${order.order_number}`)
+          } catch (err) {
+            toast.error('Payment received but order confirmation failed. Please contact us with your payment ID: ' + response.razorpay_payment_id)
+            setLoading(false)
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setLoading(false)
+            toast('Payment cancelled', { icon: 'ℹ️' })
+          },
+        },
+      }
+
+      const rzp = new window.Razorpay(options)
+      rzp.on('payment.failed', (response) => {
+        setLoading(false)
+        toast.error(`Payment failed: ${response.error.description}`)
+      })
+      rzp.open()
+    } catch (err) {
+      setLoading(false)
+      toast.error(err.response?.data?.error || 'Could not initiate payment. Please try again.')
+    }
+  }
+
+  const handleCOD = async () => {
+    setLoading(true)
+    try {
+      const order = await placeOrderInDB('cod', 'pending')
       clearCart()
-      navigate(`/order-success/${res.data.order.order_number}`)
+      navigate(`/order-success/${order.order_number}`)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to place order. Please try again.')
-    } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!validateForm()) return
+    if (form.payment_method === 'cod') {
+      await handleCOD()
+    } else {
+      await handleRazorpayPayment()
     }
   }
 
@@ -58,7 +138,7 @@ export default function Checkout() {
 
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Form */}
+            {/* Left column — form */}
             <div className="lg:col-span-2 space-y-6">
               {/* Contact */}
               <div className="card p-6">
@@ -105,7 +185,7 @@ export default function Checkout() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">Pincode *</label>
-                      <input className="input-field" placeholder="248001" maxLength={6} value={form.pincode} onChange={e => update('pincode', e.target.value)} required />
+                      <input className="input-field" placeholder="248001" maxLength={6} value={form.pincode} onChange={e => update('pincode', e.target.value.replace(/\D/g, ''))} required />
                     </div>
                   </div>
                   <div>
@@ -122,23 +202,61 @@ export default function Checkout() {
                 </h2>
                 <div className="space-y-3">
                   {[
-                    { value: 'cod', label: 'Cash on Delivery', desc: 'Pay when your order arrives', icon: '💵' },
-                    { value: 'upi', label: 'UPI / Online Payment', desc: 'Pay securely via UPI, cards, netbanking', icon: '📱' },
+                    {
+                      value: 'online',
+                      label: 'Pay Online',
+                      desc: 'UPI, Credit/Debit Card, Net Banking, Wallets — powered by Razorpay',
+                      icon: '💳',
+                      badge: 'Recommended',
+                    },
+                    {
+                      value: 'cod',
+                      label: 'Cash on Delivery',
+                      desc: 'Pay when your order arrives at your doorstep',
+                      icon: '💵',
+                      badge: null,
+                    },
                   ].map(opt => (
-                    <label key={opt.value} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${form.payment_method === opt.value ? 'border-forest-600 bg-forest-50' : 'border-gray-200 hover:border-forest-300'}`}>
-                      <input type="radio" name="payment" value={opt.value} checked={form.payment_method === opt.value} onChange={() => update('payment_method', opt.value)} className="accent-forest-700" />
+                    <label
+                      key={opt.value}
+                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                        form.payment_method === opt.value
+                          ? 'border-forest-600 bg-forest-50'
+                          : 'border-gray-200 hover:border-forest-300'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value={opt.value}
+                        checked={form.payment_method === opt.value}
+                        onChange={() => update('payment_method', opt.value)}
+                        className="accent-forest-700"
+                      />
                       <span className="text-2xl">{opt.icon}</span>
-                      <div>
-                        <div className="font-medium text-forest-900">{opt.label}</div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-forest-900">{opt.label}</span>
+                          {opt.badge && (
+                            <span className="bg-forest-700 text-white text-xs px-2 py-0.5 rounded-full">{opt.badge}</span>
+                          )}
+                        </div>
                         <div className="text-sm text-gray-500">{opt.desc}</div>
                       </div>
                     </label>
                   ))}
                 </div>
+
+                {form.payment_method === 'online' && (
+                  <div className="mt-4 flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">
+                    <Shield size={16} className="shrink-0 mt-0.5" />
+                    <span>Your payment is secured by Razorpay. We never store your card details. Supports UPI, Paytm, PhonePe, Google Pay and all major cards.</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Order Summary */}
+            {/* Right column — order summary */}
             <div className="lg:col-span-1">
               <div className="card p-6 sticky top-24">
                 <h2 className="font-bold text-forest-900 text-lg mb-5">Order Summary</h2>
@@ -161,26 +279,37 @@ export default function Checkout() {
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span>Shipping</span>
-                    <span className={shipping === 0 ? 'text-green-600 font-medium' : ''}>{shipping === 0 ? 'FREE' : `₹${shipping}`}</span>
+                    <span className={shipping === 0 ? 'text-green-600 font-medium' : ''}>
+                      {shipping === 0 ? 'FREE' : `₹${shipping}`}
+                    </span>
                   </div>
+                  {shipping > 0 && (
+                    <p className="text-xs text-gray-400">Add ₹{(freeShippingAbove - totalPrice).toFixed(0)} more for free shipping</p>
+                  )}
                   <div className="border-t border-gray-200 pt-2 flex justify-between font-bold text-forest-900 text-base">
                     <span>Total</span><span>₹{grandTotal.toFixed(0)}</span>
                   </div>
                 </div>
 
-                <button type="submit" disabled={loading} className="btn-primary w-full justify-center flex items-center gap-2 disabled:opacity-60">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary w-full justify-center flex items-center gap-2 disabled:opacity-60 text-base py-3"
+                >
                   {loading ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Placing Order...
+                      {form.payment_method === 'cod' ? 'Placing Order...' : 'Opening Payment...'}
                     </>
-                  ) : (
+                  ) : form.payment_method === 'cod' ? (
                     `Place Order · ₹${grandTotal.toFixed(0)}`
+                  ) : (
+                    `Pay ₹${grandTotal.toFixed(0)} Securely`
                   )}
                 </button>
 
-                <p className="text-xs text-center text-gray-400 mt-3">
-                  🔒 Your information is safe with us
+                <p className="text-xs text-center text-gray-400 mt-3 flex items-center justify-center gap-1">
+                  <Shield size={12} /> Your information is safe with us
                 </p>
               </div>
             </div>
